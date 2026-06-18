@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: deepseek-balance
+    runtime: docker
+    plan: free
+    envVars:
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: CACHE_TTL_SECONDS
+        value: "60"
+      - key: PORT
+        value: "5000"
