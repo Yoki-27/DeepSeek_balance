@@ -1,227 +1,182 @@
 /**
- * DeepSeek Balance — iOS 桌面小组件 (Scriptable)
- * ================================================
- * Apple Liquid Glass 风格
- *
- * 使用方式:
- *   1. App Store 下载 Scriptable (免费)
- *   2. 新建脚本, 粘贴此文件全部内容
- *   3. 修改 API_BASE 为你的后端地址
- *   4. 长按桌面 → 添加小组件 → 搜索 Scriptable → 选择本脚本
+ * DeepSeek Balance — iOS 桌面小组件 (Scriptable)  ·  2×2 Medium
+ * ================================================================
+ * Apple Liquid Glass 风格 — 浅蓝底 / 毛玻璃卡片 / 适配中号尺寸
  */
 
-// ===================================================================
-// 配置
-// ===================================================================
-const API_BASE = "http://192.168.128.135:5000";
-// 如果用了 serveo 公网隧道, 改成:
-// const API_BASE = "https://1838ea4270ddd4c0-182-143-176-219.serveousercontent.com";
+const API_BASE = "http://172.20.10.2:5000";
+const SYMBOLS = { CNY: "¥", USD: "$", EUR: "€" };
 
 // ===================================================================
-// 颜色 — Liquid Glass 暗色调色板
+// 🎨 配色
 // ===================================================================
-const COLORS = {
-  bg:       new Color("#000000"),
-  cardBg:   new Color("#ffffff", 0.10),    // 10% 透明白
-  text:     new Color("#ffffff"),
-  textDim:  new Color("#ffffff", 0.45),
-  textSoft: new Color("#ffffff", 0.70),
-  accent:   new Color("#818cf8"),           // indigo-400
-  accentBg: new Color("#6366f1", 0.18),
-  success:  new Color("#34c759"),
-  danger:   new Color("#ff453a"),
-  border:   new Color("#ffffff", 0.10),
-  highlight: new Color("#ffffff", 0.06),    // card highlight
-};
+const white    = new Color("#ffffff");
+const white70  = new Color("#ffffff", 0.70);
+const white50  = new Color("#ffffff", 0.50);
+const white35  = new Color("#ffffff", 0.35);
+
+const glassBg  = new Color("#ffffff", 0.15);
+const glassBdr = new Color("#ffffff", 0.30);
+
+const accent   = new Color("#7eb8f4");
+const accentBg = new Color("#3b82f6", 0.10);
+const green    = new Color("#5eea8b");
+const red      = new Color("#ff6b6b");
+const hairline = new Color("#ffffff", 0.10);
 
 // ===================================================================
-// 数据获取
+// 数据
 // ===================================================================
 async function fetchBalance() {
   const req = new Request(`${API_BASE}/api/balance`);
   req.method = "GET";
   req.headers = { "Accept": "application/json" };
   req.timeoutInterval = 10;
+  try { return await req.loadJSON(); }
+  catch (e) { return { error: `连接失败: ${e.message}`, currencies: [] }; }
+}
 
-  try {
-    const json = await req.loadJSON();
-    return json;
-  } catch (e) {
-    return { error: `连接失败: ${e.message}`, currencies: [] };
+function fmt(n) {
+  if (isNaN(n)) return "—";
+  const [w, f = ""] = Number(n).toFixed(2).split(".");
+  return Number(w).toLocaleString() + "." + f;
+}
+
+// ===================================================================
+// 🪟 毛玻璃卡片
+// ===================================================================
+function glassCard(parent, symbol, currency, total, toppedUp, granted) {
+  const card = parent.addStack();
+  card.layoutVertically();
+  card.setPadding(8, 12, 8, 12);
+  card.backgroundColor = glassBg;
+  card.cornerRadius = 16;
+  card.borderWidth = 0.5;
+  card.borderColor = glassBdr;
+
+  // 币种标签
+  const badge = card.addStack();
+  badge.setPadding(3, 8, 3, 8);
+  badge.backgroundColor = accentBg;
+  badge.cornerRadius = 8;
+  const bt = badge.addText(currency);
+  bt.font = Font.boldSystemFont(10);
+  bt.textColor = accent;
+
+  card.addSpacer(5);
+
+  // 大余额 — 整数小数同字号，符号与数字底部对齐
+  const bal = card.addStack();
+  bal.layoutHorizontally();
+  bal.bottomAlignContent();
+
+  const sy = bal.addText(symbol);
+  sy.font = Font.lightSystemFont(24);
+  sy.textColor = white70;
+
+  bal.addSpacer(2);
+
+  const amt = bal.addText(fmt(total));
+  amt.font = Font.lightSystemFont(24);
+  amt.textColor = white;
+
+  card.addSpacer(5);
+
+  // 细线
+  const ln = card.addStack();
+  ln.backgroundColor = hairline;
+  ln.size = new Size(-1, 0.5);
+
+  card.addSpacer(5);
+
+  // 充值 / 赠送
+  const rows = card.addStack();
+  rows.layoutVertically();
+  rows.spacing = 2;
+
+  for (const [label, val] of [["充值", toppedUp], ["赠送", granted]]) {
+    const r = rows.addStack();
+    r.layoutHorizontally();
+    const lb = r.addText(label);
+    lb.font = Font.systemFont(9);
+    lb.textColor = white50;
+    r.addSpacer();
+    const vl = r.addText(fmt(val));
+    vl.font = Font.mediumSystemFont(10);
+    vl.textColor = white70;
   }
 }
 
 // ===================================================================
-// 辅助
-// ===================================================================
-function fmtAmount(val) {
-  const num = Number(val);
-  if (isNaN(num)) return "—";
-  const [whole, frac = ""] = num.toFixed(2).split(".");
-  return Number(whole).toLocaleString() + "." + frac;
-}
-
-// ===================================================================
-// 渲染小组件
+// 🎯 主入口
 // ===================================================================
 async function createWidget() {
   const data = await fetchBalance();
-  const widget = new ListWidget();
-  widget.backgroundColor = COLORS.bg;
-  widget.setPadding(16, 16, 16, 16);
+  const currencies = data.currencies || [];
 
-  // --- 标题行 ---
+  const widget = new ListWidget();
+  widget.backgroundColor = new Color("#7eb8f4", 0.60);
+  widget.setPadding(14, 14, 8, 14);
+
+  // ---- 顶部：单行标题 + 状态 ----
   const header = widget.addStack();
   header.layoutHorizontally();
   header.centerAlignContent();
-  header.bottomAlignContent();
 
-  // Logo
-  const logoStack = header.addStack();
-  logoStack.size = new Size(36, 36);
-  logoStack.centerAlignContent();
-  logoStack.backgroundColor = new Color("#6366f1", 0.6);
-  logoStack.cornerRadius = 10;
-  const logoText = logoStack.addText("DS");
-  logoText.font = Font.boldSystemFont(16);
-  logoText.textColor = Color.white();
-  logoText.centerAlignText();
-
-  header.addSpacer(10);
-
-  // Title
-  const titleStack = header.addStack();
-  titleStack.layoutVertically();
-  const title = titleStack.addText("DeepSeek");
-  title.font = Font.boldSystemFont(16);
-  title.textColor = COLORS.text;
-  const sub = titleStack.addText("余额监控");
-  sub.font = Font.systemFont(11);
-  sub.textColor = COLORS.textDim;
+  const t1 = header.addText("DeepSeek 余额");
+  t1.font = Font.boldSystemFont(12);
+  t1.textColor = white;
 
   header.addSpacer();
 
-  // Status dot
-  const dot = header.addText("●");
-  dot.font = Font.systemFont(7);
-  dot.textColor = data.error ? COLORS.danger : COLORS.success;
+  const status = header.addStack();
+  status.layoutHorizontally();
+  status.centerAlignContent();
+  status.spacing = 3;
+  const dot = status.addText("●");
+  dot.font = Font.systemFont(6);
+  dot.textColor = data.error ? red : green;
+  const st = status.addText(data.error ? "离线" : "在线");
+  st.font = Font.systemFont(9);
+  st.textColor = white50;
 
-  widget.addSpacer(14);
+  widget.addSpacer(8);
 
-  // --- 余额卡片 ---
-  const currencies = data.currencies || [];
+  // ---- 余额卡片 ----
   if (currencies.length === 0) {
-    const msgStack = widget.addStack();
-    msgStack.setPadding(20, 0, 20, 0);
-    const msg = msgStack.addText(data.error || "暂无余额数据");
-    msg.font = Font.systemFont(13);
-    msg.textColor = COLORS.textDim;
-    msg.centerAlignText();
+    widget.addSpacer(10);
+    const et = widget.addText(data.error || "暂无余额数据");
+    et.font = Font.systemFont(12);
+    et.textColor = white50;
+    et.centerAlignText();
+    widget.addSpacer(10);
+  } else if (currencies.length === 1) {
+    const c = currencies[0];
+    glassCard(widget, SYMBOLS[c.currency] || "?", c.currency,
+      c.total_balance, c.topped_up_balance, c.granted_balance);
   } else {
+    const row = widget.addStack();
+    row.layoutHorizontally();
+    row.spacing = 8;
     for (const c of currencies) {
-      // Card container with glass background
-      const card = widget.addStack();
-      card.layoutVertically();
-      card.setPadding(14, 16, 14, 16);
-      card.backgroundColor = COLORS.cardBg;
-      card.cornerRadius = 18;
-      card.borderWidth = 1;
-      card.borderColor = COLORS.border;
-
-      // Currency badge row
-      const badgeRow = card.addStack();
-      badgeRow.layoutHorizontally();
-      const badge = badgeRow.addStack();
-      badge.setPadding(3, 10, 3, 10);
-      badge.backgroundColor = COLORS.accentBg;
-      badge.cornerRadius = 12;
-      const badgeText = badge.addText(`● ${c.currency}`);
-      badgeText.font = Font.systemFont(10);
-      badgeText.textColor = COLORS.accent;
-
-      card.addSpacer(10);
-
-      // Total balance
-      const balRow = card.addStack();
-      balRow.layoutHorizontally();
-      balRow.bottomAlignContent();
-
-      const symbol = balRow.addText("¥");
-      symbol.font = Font.lightSystemFont(28);
-      symbol.textColor = COLORS.textDim;
-
-      balRow.addSpacer(4);
-
-      const amountParts = fmtAmount(c.total_balance).split(".");
-      const whole = balRow.addText(amountParts[0]);
-      whole.font = Font.lightSystemFont(42);
-      whole.textColor = COLORS.text;
-
-      const frac = balRow.addText("." + (amountParts[1] || "00"));
-      frac.font = Font.lightSystemFont(22);
-      frac.textColor = COLORS.textDim;
-
-      card.addSpacer(12);
-
-      // Divider
-      const div = card.addStack();
-      div.backgroundColor = new Color("#ffffff", 0.06);
-      div.size = new Size(-1, 1);
-
-      card.addSpacer(10);
-
-      // Detail row
-      const detail = card.addStack();
-      detail.layoutHorizontally();
-      detail.spacing = 24;
-
-      // Topped up
-      const tStack = detail.addStack();
-      tStack.layoutVertically();
-      tStack.spacing = 1;
-      const tLabel = tStack.addText("充值余额");
-      tLabel.font = Font.systemFont(9);
-      tLabel.textColor = COLORS.textDim;
-      const tVal = tStack.addText(fmtAmount(c.topped_up_balance));
-      tVal.font = Font.mediumSystemFont(13);
-      tVal.textColor = COLORS.textSoft;
-
-      // Granted
-      const gStack = detail.addStack();
-      gStack.layoutVertically();
-      gStack.spacing = 1;
-      const gLabel = gStack.addText("赠送余额");
-      gLabel.font = Font.systemFont(9);
-      gLabel.textColor = COLORS.textDim;
-      const gVal = gStack.addText(fmtAmount(c.granted_balance));
-      gVal.font = Font.mediumSystemFont(13);
-      gVal.textColor = COLORS.textSoft;
-
-      widget.addSpacer(10);
+      glassCard(row, SYMBOLS[c.currency] || "?", c.currency,
+        c.total_balance, c.topped_up_balance, c.granted_balance);
     }
   }
 
-  // --- 更新时间 ---
-  widget.addSpacer(8);
+  // ---- 底部 ----
+  widget.addSpacer(4);
   const ts = widget.addText(
     "更新 " + new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
   );
-  ts.font = Font.systemFont(10);
-  ts.textColor = COLORS.textDim;
+  ts.font = Font.systemFont(8);
+  ts.textColor = white35;
   ts.centerAlignText();
 
   return widget;
 }
 
-// ===================================================================
-// 入口
-// ===================================================================
 const widget = await createWidget();
-
-if (config.runsInWidget) {
-  Script.setWidget(widget);
-} else {
-  widget.presentSmall();
-}
-
+if (config.runsInWidget) { Script.setWidget(widget); }
+else { widget.presentMedium(); }
 Script.complete();
