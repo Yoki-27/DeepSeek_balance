@@ -4,16 +4,18 @@
  * Apple Liquid Glass 风格 — 浅蓝底 / 毛玻璃卡片 / 适配中号尺寸
  */
 
-const API_BASE = "http://172.20.10.2:5000";
+const DEEPSEEK_KEY = "填写你的 DeepSeek API Key";
+const DEEPSEEK_API = "https://api.deepseek.com";
 const SYMBOLS = { CNY: "¥", USD: "$", EUR: "€" };
 
 // ===================================================================
 // 🎨 配色
 // ===================================================================
 const white    = new Color("#ffffff");
+const white80  = new Color("#ffffff", 0.80);
 const white70  = new Color("#ffffff", 0.70);
 const white50  = new Color("#ffffff", 0.50);
-const white35  = new Color("#ffffff", 0.35);
+const white55  = new Color("#ffffff", 0.55);
 
 const glassBg  = new Color("#ffffff", 0.15);
 const glassBdr = new Color("#ffffff", 0.30);
@@ -25,15 +27,33 @@ const red      = new Color("#ff6b6b");
 const hairline = new Color("#ffffff", 0.10);
 
 // ===================================================================
-// 数据
+// 数据 — 直接请求 DeepSeek API（国内可访问，无需后端）
 // ===================================================================
 async function fetchBalance() {
-  const req = new Request(`${API_BASE}/api/balance`);
+  const req = new Request(`${DEEPSEEK_API}/user/balance`);
   req.method = "GET";
-  req.headers = { "Accept": "application/json" };
+  req.headers = {
+    "Accept": "application/json",
+    "Authorization": `Bearer ${DEEPSEEK_KEY}`
+  };
   req.timeoutInterval = 10;
-  try { return await req.loadJSON(); }
-  catch (e) { return { error: `连接失败: ${e.message}`, currencies: [] }; }
+  try {
+    const raw = await req.loadJSON();
+    const infos = raw.balance_infos || [];
+    const currencies = infos.map(info => ({
+      currency: info.currency || "???",
+      total_balance: parseFloat(info.total_balance || 0),
+      topped_up_balance: parseFloat(info.topped_up_balance || 0),
+      granted_balance: parseFloat(info.granted_balance || 0),
+    }));
+    return {
+      error: null,
+      is_available: raw.is_available || false,
+      currencies,
+    };
+  } catch (e) {
+    return { error: `连接失败: ${e.message}`, currencies: [] };
+  }
 }
 
 function fmt(n) {
@@ -99,11 +119,11 @@ function glassCard(parent, symbol, currency, total, toppedUp, granted) {
     r.layoutHorizontally();
     const lb = r.addText(label);
     lb.font = Font.systemFont(9);
-    lb.textColor = white50;
+    lb.textColor = white55;
     r.addSpacer();
     const vl = r.addText(fmt(val));
     vl.font = Font.mediumSystemFont(10);
-    vl.textColor = white70;
+    vl.textColor = white80;
   }
 }
 
@@ -170,7 +190,7 @@ async function createWidget() {
     "更新 " + new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
   );
   ts.font = Font.systemFont(8);
-  ts.textColor = white35;
+  ts.textColor = white55;
   ts.centerAlignText();
 
   return widget;
